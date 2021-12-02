@@ -3,7 +3,7 @@ pragma solidity ^0.8.4;
 
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import './interfaces/IVesting.sol';
+import "./interfaces/IVesting.sol";
 
 //Contract to claim inital 100 tokens
 contract Claim {
@@ -27,8 +27,8 @@ contract Claim {
         uint256 singleToken = 1 * 10 ** 18;
         uint256 vestingTokens = 99999 * 10 ** 18;
 
-        _token.safeTransfer(msg.sender, singleToken);
-        _token.safeTransfer(address(_vesting), vestingTokens);
+        _token.transfer(msg.sender, singleToken);
+        _token.transfer(address(_vesting), vestingTokens);
 
         _vesting.setVestingSchedule(msg.sender, vestingTokens, true, 26, 156);
 

@@ -14,7 +14,7 @@ contract DAOToken is ERC20, Ownable {
         _mint(initOwner, initSupply);
     }
 
-    function mint(address to, uint amount) pulbic onlyOwner {
+    function mint(address to, uint amount) public onlyOwner {
         _mint(to, amount);
     } 
 }
