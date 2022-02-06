@@ -13,8 +13,8 @@ contract AgreementFactory is Ownable {
     uint256 public creationTime;
     uint256 public maturityTime;
     bool public loanRepaid;
-    address public ottleyAddress;
-    bool public ottleyVerified;
+    address public delegateAddress;
+    bool public delegateVerified;
     bool public loanActive;
 
     struct LoanAgreement {
@@ -25,7 +25,7 @@ contract AgreementFactory is Ownable {
         uint256 creationTime;
         uint256 maturityTime;
         bool loanRepaid;
-        bool ottleyVerified;
+        bool delegateVerified;
         bool loanActive;
     }
 
@@ -34,13 +34,13 @@ contract AgreementFactory is Ownable {
 
     event loanCreated(uint256 LoanNumber, uint256 Rate, uint256 LoanAmount, uint256 LoanDuration, address BorrowerAddress);
     event loanDeprecated(uint256 LoanNumber, uint256 LoanAmount, uint256 creationTime, uint256 maturityTime, uint256 DaysOverdue, bool LoanRepaid);
-    event loanApproved(uint256 LoanNumber, uint256 Rate, uint256 LoanAmount, uint256 LoanDuration,address UserAddress,bool OttleyVerified);
+    event loanApproved(uint256 LoanNumber, uint256 Rate, uint256 LoanAmount, uint256 LoanDuration,address UserAddress,bool DelegateVerified);
     event loanOverdue(uint256 LoanNumber, uint256 ExpiryTimestamp, uint256 CurrentTimestamp);
 
     //will also need to add in {address agentWhitelist, address userWhitelist} into the constructor
-    constructor(address OttleyWallet) public {
+    constructor(address DelegateAddress) public {
         globalLoanNumber = 1;
-        ottleyAddress = OttleyWallet;
+        delegateAddress = DelegateAddress;
     }
     
     /** @notice function call used for creating loan agreements
@@ -62,7 +62,7 @@ contract AgreementFactory is Ownable {
     /** @notice function used to execute an existing loan agreement
         @param loanNumber the loan number for the loan to be executed */
     function ExecuteLoanAgreement(uint256 loanNumber) public payable returns (bool) {
-        require(_LoanNumberToLoanAgreement[loanNumber].ottleyVerified = true, "ERROR: Loan not verified by Ottley Wallet");
+        require(_LoanNumberToLoanAgreement[loanNumber].delegateVerified = true, "ERROR: Loan not verified by delegate wallet");
         _LoanNumberToLoanAgreement[loanNumber].loanActive = true;
         address payable userAd = payable(_LoanNumberToLoanAgreement[loanNumber].borrowerAddress);
 
@@ -72,18 +72,18 @@ contract AgreementFactory is Ownable {
 
         emit loanApproved(loanNumber, _LoanNumberToLoanAgreement[loanNumber].rate, _LoanNumberToLoanAgreement[loanNumber].loanAmount, 
         _LoanNumberToLoanAgreement[loanNumber].loanDuration,_LoanNumberToLoanAgreement[loanNumber].borrowerAddress, 
-        _LoanNumberToLoanAgreement[loanNumber].ottleyVerified);
+        _LoanNumberToLoanAgreement[loanNumber].delegateVerified);
         return _LoanNumberToLoanAgreement[loanNumber].loanActive;
     }
 
 
-    /** @notice function call for the Ottley wallet to verify the loan agreement
+    /** @notice function call for the delegate wallet to verify the loan agreement
         @param loanNumber the loan number that the verification is for
         @dev ideally we will be able to remove this function and have this verification performed through ethereum signing*/
-    function OttleyVerify(uint256 loanNumber) public returns (bool) {
-        require(msg.sender == ottleyAddress, "ERROR: OttleyVerify only callable by Ottley Capital Wallet");
-        _LoanNumberToLoanAgreement[loanNumber].ottleyVerified = true;
-        return _LoanNumberToLoanAgreement[loanNumber].ottleyVerified;
+    function DelegateVerify(uint256 loanNumber) public returns (bool) {
+        require(msg.sender == delegateAddress, "ERROR: DelegateVerify only callable by Delegate Wallet");
+        _LoanNumberToLoanAgreement[loanNumber].delegateVerified = true;
+        return _LoanNumberToLoanAgreement[loanNumber].delegateVerified;
     }
 
     /**@notice function to repay a loan */
