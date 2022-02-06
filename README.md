@@ -1,3 +1,3 @@
-# Ottley Capital Trial DAO 
+# AgriDAO Initial
 
-This is a repository for the Centric + Ottley Captial trial DAO, launched onthe Rinkeby testnet.
+This is a repository for AgriDAO.
