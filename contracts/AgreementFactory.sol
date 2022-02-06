@@ -111,6 +111,7 @@ contract AgreementFactory is Ownable {
     /**@notice function call to check if a loan is overdue
     @param loanNumber the loan number that is checked if past maturity*/
     function checkOverdue(uint256 loanNumber) view public returns (bool) {
+        require(_LoanNumberToLoanAgreement[loanNumber].loanRepaid == false, "ERROR: Loan already inactive");
         if(_LoanNumberToLoanAgreement[loanNumber].maturityTime < block.timestamp){
             return true;
         }
