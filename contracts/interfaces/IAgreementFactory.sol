@@ -16,16 +16,15 @@ interface IAgreementFactory {
         @dev ideally we will be able to remove this function and have this verification performed through ethereum signing*/
     function OttleyVerify(uint256 LoanNumber) external returns (bool);
 
-    /** @notice function call for the Agent to verify the loan agreement
-        @param LoanNumber the loan number that the verification is for
-        @dev ideally we will be able to remove this function and have this verification performed through ethereum signing */
-    function AgentVerify(uint256 LoanNumber) external returns (bool);
-    /** @notice function call used to rebase all existing loans - to be called by the keeper contract*/
-    function rebaseAll() external;
+    /**@notice function to repay a loan */
+    function repayLoan(uint256 loanNumber) external payable returns (bool);
 
-    /** @notice function call used to rebase a specific loan
-        @param LoanNumber the LoanNumber of the loan to be rebased*/
-    function rebase(uint256 LoanNumber) external returns (uint256);
+    /**@notice function call to check if a loan is overdue
+    @param loanNumber the loan number that is checked if past maturity*/
+    function checkOverdue(uint256 loanNumber) external view returns (bool);
+
+    /** @notice function call to check for all overdue loans any overdue loans*/
+    function checkAll() external view returns (uint256[] memory);
 
     /** @notice function call used to 'deprecate' a loan - called when a loan has been fully repaid
         @param LoanNumber the loanNumber for the loan to be deprecated */
