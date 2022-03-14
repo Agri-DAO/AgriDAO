@@ -5,7 +5,13 @@ import "./interfaces/IBorrowerLogic.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/utils/Context.sol";
 
+import "./DAOToken.sol";
+
+//Pretending DAOToken is USDC
 contract BorrowerLogic is Context, AccessControl {
+
+    DAOToken public daoToken;
+
     uint256 public globalLoanNumber;
     uint256 public rate;
     uint256 public agentCommission;
@@ -16,7 +22,7 @@ contract BorrowerLogic is Context, AccessControl {
     uint256 public creationTime;
     uint256 public maturityTime;
     bool public loanRepaid;
-    address public delegateAddress;
+    address payable public delegateAddress;
     bool public delegateVerified;
     bool public loanActive;
     address public lenderContract;
@@ -32,7 +38,7 @@ contract BorrowerLogic is Context, AccessControl {
         uint256 rate;
         uint256 loanAmount;
         uint256 loanDuration;
-        address borrowerAddress;
+        address delegateAddress;
         uint256 creationTime;
         uint256 maturityTime;
         bool loanRepaid;
@@ -43,16 +49,17 @@ contract BorrowerLogic is Context, AccessControl {
     //mapping loanNumber to LoanAgreement struct
     mapping(uint256 => LoanAgreement) public _LoanNumberToLoanAgreement;
 
-    event loanCreated(uint256 LoanNumber, uint256 Rate, uint256 LoanAmount, uint256 LoanDuration, address BorrowerAddress);
+    event loanCreated(uint256 LoanNumber, uint256 Rate, uint256 LoanAmount, uint256 LoanDuration, address DelegateAddress);
     event loanDeprecated(uint256 LoanNumber, uint256 LoanAmount, uint256 creationTime, uint256 maturityTime, uint256 DaysOverdue, bool LoanRepaid);
-    event loanApproved(uint256 LoanNumber, uint256 Rate, uint256 LoanAmount, uint256 LoanDuration,address UserAddress,bool DelegateVerified);
+    event loanApproved(uint256 LoanNumber, uint256 Rate, uint256 LoanAmount, uint256 LoanDuration, address UserAddress, bool DelegateVerified);
     event loanOverdue(uint256 LoanNumber, uint256 ExpiryTimestamp, uint256 CurrentTimestamp);
 
-    constructor(address DelegateAddress, address LenderContract, address DaoTreasury) public {
+    constructor(address payable DelegateAddress, address LenderContract, address DaoTreasury, address token) {
         globalLoanNumber = 1;
         delegateAddress = DelegateAddress;
         daoTreasury = DaoTreasury;
         lenderContract = LenderContract;
+        daoToken = DAOToken(token);
         _grantRole(OWNER_ROLE, _msgSender());
         _setRoleAdmin(OWNER_ROLE, OWNER_ROLE);
         _setRoleAdmin(LENDER_ROLE, OWNER_ROLE);
@@ -80,13 +87,19 @@ contract BorrowerLogic is Context, AccessControl {
     /** @notice function used to execute an existing loan agreement
         @param loanNumber the loan number for the loan to be executed
         @dev will have to update the fund transfer function to be exclusively payable in USDC*/
-    function executeLoanAgreement(uint256 loanNumber) public payable returns (bool) {
-        require(_LoanNumberToLoanAgreement[loanNumber].delegateVerified == true, "ERROR: Loan not verified by delegate wallet");
+    function executeLoanAgreement(uint256 loanNumber) public onlyDelegate returns (bool) {
+        //require(_LoanNumberToLoanAgreement[loanNumber].delegateVerified == true, "ERROR: Loan not verified by delegate wallet");
         _LoanNumberToLoanAgreement[loanNumber].loanActive = true;
-        require(_LoanNumberToLoanAgreement[loanNumber].loanAmount == msg.value, "ERROR: msg.value not equal to loan amount");
+
+        address usr = msg.sender;
+
+        require(_LoanNumberToLoanAgreement[loanNumber].loanAmount <= daoToken.balanceOf(msg.sender), "ERROR: msg.value not equal to loan amount");
+
         emit loanApproved(loanNumber, _LoanNumberToLoanAgreement[loanNumber].rate, _LoanNumberToLoanAgreement[loanNumber].loanAmount,
-        _LoanNumberToLoanAgreement[loanNumber].loanDuration,_LoanNumberToLoanAgreement[loanNumber].borrowerAddress,
+        _LoanNumberToLoanAgreement[loanNumber].loanDuration,_LoanNumberToLoanAgreement[loanNumber].delegateAddress,
         _LoanNumberToLoanAgreement[loanNumber].delegateVerified);
+        daoToken.transferFrom(usr, address(this), _LoanNumberToLoanAgreement[loanNumber].loanAmount);
+
         return _LoanNumberToLoanAgreement[loanNumber].loanActive;
     }
 
@@ -116,21 +129,30 @@ contract BorrowerLogic is Context, AccessControl {
         @param loanNumber the loanNumber that the funds are being routed for
         @param loanAmount the final amount of the loan equal to the loanBase + interest
         @param loanBase the initial base amount of the loan */
-    function routeFunds(uint256 loanNumber, uint256 loanAmount, uint256 loanBase) public onlyDelegate returns (bool){
+    function routeFunds(uint256 loanNumber, uint256 loanAmount, uint256 loanBase) public onlyDelegate returns (bool, bool, bool){
         uint256 interestAmount = loanAmount - loanBase;
-        uint256 interestAmountLenders = (interestAmount * 7)/(interestAmount * 10); // need to figure out a better way to multiply by decimal (this is * 0.7)
-        uint256 interestAmountDAO = (interestAmount * 1)/(interestAmount * 10); // this is multiply by 0.1
-        uint256 interestAmountDelegate = (interestAmount * 2)/(interestAmount * 10); // this is multiply by 0.2
+
+        uint256 interestAmountLenders = (interestAmount * 70) / 100; // need to figure out a better way to multiply by decimal (this is * 0.7)
+        uint256 interestAmountDAO = (interestAmount * 10) / 100; // this is multiply by 0.1
+        uint256 interestAmountDelegate = (interestAmount * 20) / 100; // this is multiply by 0.2
 
         //pay loan base straight to lender contract
         //split interest amount into 70% to lender contract, 10% to DAO treasury, 20% to Delegate
+
+        (bool success, ) = delegateAddress.call{value: interestAmountDelegate}("");
+        (bool success1, ) = lenderContract.call{value: interestAmountLenders}("");
+        (bool success2, ) = daoTreasury.call{value: interestAmountDAO}("");
+        return (success, success1, success2);
+
+
+
 
     }
 
     /**@notice function to repay a loan
     @param loanNumber the loan number of the loan to be repaid
     @dev will have to update the fund transfer function to be exclusively payable in USDC*/
-    function repayLoan(uint256 loanNumber) public onlyBorrower payable returns (bool){
+    function repayLoan(uint256 loanNumber) public onlyDelegate payable returns (bool){
         uint256 CurrentTime = block.timestamp;
         uint256 loanBase = _LoanNumberToLoanAgreement[loanNumber].loanAmount;
         uint256 LoanValue = _LoanNumberToLoanAgreement[loanNumber].loanAmount;
@@ -173,6 +195,10 @@ contract BorrowerLogic is Context, AccessControl {
             }
         }
         return overdueLoans;
+    }
+
+    receive() external payable {
+
     }
 
     /** @notice function call used to 'deprecate' a loan - called when a loan has been fully repaid

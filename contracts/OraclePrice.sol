@@ -16,6 +16,7 @@ contract OraclePrice {
         priceOracles["USDC/ETH"] = 0xdCA36F27cbC4E38aE16C4E9f99D39b42337F6dcf;
         priceOracles["DAI/USD"] = 0x2bA49Aaa16E6afD2a993473cfB70Fa8559B523cF;
         priceFeed = AggregatorV3Interface(priceOracles["USDC/ETH"]);
+        
 
     }
 
@@ -32,5 +33,7 @@ contract OraclePrice {
         (,int price,,,) = priceFeed.latestRoundData();
         return price;
     }
+
+
 
 }

@@ -2,7 +2,7 @@ const { expect } = require("chai");
 const { utils, Signer } = require("ethers");
 const { ethers } = require("hardhat");
 
-describe("Deployments", function () {
+xdescribe("Deployments", function () {
     it("Should successfully Deploy the contracts", async function () {
         const BorrowerLogic = await ethers.getContractFactory("BorrowerLogic");
         let accounts = await hre.ethers.getSigners();
@@ -14,7 +14,7 @@ describe("Deployments", function () {
     });
 });
 
-describe("creating and executing a loan", function () {
+xdescribe("creating and executing a loan", function () {
     it("Should be able to successfully create a loan agreement", async function (){
         const BorrowerLogic = await ethers.getContractFactory("BorrowerLogic");
         let accounts = await hre.ethers.getSigners();
@@ -32,8 +32,8 @@ describe("creating and executing a loan", function () {
         console.log(loanExecuted);
 
     });
-
-describe("Testing Access Control", function() {
+  });
+xdescribe("Testing Access Control", function() {
     before(async function () {
         this.accounts = await hre.ethers.getSigners();
         this.Borrow = await ethers.getContractFactory("BorrowerLogic");
@@ -69,6 +69,57 @@ describe("Testing Access Control", function() {
 
 });
 
-});
+xdescribe("Testing routing of funds", function() {
+  it("Should transfer funds to delegate", async function() {
+    const BorrowerLogic = await ethers.getContractFactory("BorrowerLogic");
+    let accounts = await hre.ethers.getSigners();
+    let owner = accounts[0];
+    let delegate = accounts[1];
+    let lender = accounts[2];
+    let treasury = accounts[3];
+    const borrowerLogic = await BorrowerLogic.deploy(delegate.address, lender.address, treasury.address);
+    await borrowerLogic.grantDelegate(delegate.address);
+    await owner.sendTransaction({
+      to: borrowerLogic.address,
+      value: ethers.utils.parseEther("1.1")
+    })
+    console.log("Delegate address balance before route: ", ethers.utils.formatEther(await ethers.provider.getBalance(delegate.address)));
+    console.log("Lender address balance before route: ", ethers.utils.formatEther(await ethers.provider.getBalance(lender.address)));
+    console.log("DAO address balance before route: ", ethers.utils.formatEther(await ethers.provider.getBalance(treasury.address)));
+    console.log("Contract Balance before route: ", ethers.utils.formatEther(await ethers.provider.getBalance(borrowerLogic.address)), "\n");
 
-describe("repaying a loan", function () {});
+    let res = await borrowerLogic.connect(delegate).routeFunds(0, ethers.utils.parseEther("1.1"), ethers.utils.parseEther("1"));
+    console.log("\nDelegate address balance before route: ", ethers.utils.formatEther(await ethers.provider.getBalance(delegate.address)));
+    console.log("Lender address balance before route: ", ethers.utils.formatEther(await ethers.provider.getBalance(lender.address)));
+    console.log("DAO address balance before route: ", ethers.utils.formatEther(await ethers.provider.getBalance(treasury.address)));
+    console.log("Contract Balance before route: ", ethers.utils.formatEther(await ethers.provider.getBalance(borrowerLogic.address)));
+
+  });
+})
+
+describe("Testing the use of ERC20 rather than ETH", function() {
+  it("Should allow the execution of a loan", async function() {
+    const BorrowerLogic = await ethers.getContractFactory("BorrowerLogic");
+    const DAOToken = await ethers.getContractFactory("DAOToken");
+    let accounts = await hre.ethers.getSigners();
+    let owner = accounts[0];
+    let delegate = accounts[1];
+    let lender = accounts[2];
+    let treasury = accounts[3];
+    const daoToken = await DAOToken.deploy(ethers.utils.parseEther("1000"), owner.address);
+    await daoToken.transfer(delegate.address, ethers.utils.parseEther("100"));
+    console.log(ethers.utils.formatEther(await daoToken.balanceOf(delegate.address)))
+    
+    const borrowerLogic = await BorrowerLogic.deploy(delegate.address, lender.address, treasury.address, daoToken.address);
+    await borrowerLogic.grantDelegate(owner.address);
+    await borrowerLogic.grantLender(lender.address);
+    await daoToken.approve(borrowerLogic.address, ethers.utils.parseEther("100"))
+    await borrowerLogic.connect(lender).createLoanAgreement(ethers.utils.parseEther("99"), 180, 10);
+    await borrowerLogic.executeLoanAgreement(1);
+    let contractBalance = await daoToken.balanceOf(borrowerLogic.address);
+
+    console.log(ethers.utils.formatEther(contractBalance));
+
+
+  });
+}) 
