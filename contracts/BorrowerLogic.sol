@@ -13,7 +13,7 @@ contract BorrowerLogic is Context, AccessControl {
     DAOToken public daoToken;
 
     uint256 public globalLoanNumber;
-    uint256 public rate;
+    //uint256 public rate;
     uint256 public agentCommission;
     uint256 public loanAmount;
     uint256 public loanDuration;
@@ -88,7 +88,7 @@ contract BorrowerLogic is Context, AccessControl {
         @param loanNumber the loan number for the loan to be executed
         @dev will have to update the fund transfer function to be exclusively payable in USDC*/
     function executeLoanAgreement(uint256 loanNumber) public onlyDelegate returns (bool) {
-        //require(_LoanNumberToLoanAgreement[loanNumber].delegateVerified == true, "ERROR: Loan not verified by delegate wallet");
+        _LoanNumberToLoanAgreement[loanNumber].delegateVerified = true;
         _LoanNumberToLoanAgreement[loanNumber].loanActive = true;
 
         address usr = msg.sender;
@@ -103,16 +103,6 @@ contract BorrowerLogic is Context, AccessControl {
         return _LoanNumberToLoanAgreement[loanNumber].loanActive;
     }
 
-
-
-    /** @notice function call for the delegate wallet to verify the loan agreement
-        @param loanNumber the loan number that the verification is for
-        @dev ideally we will be able to remove this function and have this verification performed through ethereum signing*/
-    function delegateVerify(uint256 loanNumber) public onlyDelegate returns (bool) {
-        require(msg.sender == delegateAddress, "ERROR: DelegateVerify only callable by Delegate Wallet");
-        _LoanNumberToLoanAgreement[loanNumber].delegateVerified = true;
-        return _LoanNumberToLoanAgreement[loanNumber].delegateVerified;
-    }
 
         /**@notice function call to check if a loan is overdue
     @param loanNumber the loan number that is checked if past maturity*/
@@ -129,7 +119,7 @@ contract BorrowerLogic is Context, AccessControl {
         @param loanNumber the loanNumber that the funds are being routed for
         @param loanAmount the final amount of the loan equal to the loanBase + interest
         @param loanBase the initial base amount of the loan */
-    function routeFunds(uint256 loanNumber, uint256 loanAmount, uint256 loanBase) public onlyDelegate returns (bool, bool, bool){
+    function _routeFunds(uint256 loanNumber, uint256 loanAmount, uint256 loanBase) private {
         uint256 interestAmount = loanAmount - loanBase;
 
         uint256 interestAmountLenders = (interestAmount * 70) / 100; // need to figure out a better way to multiply by decimal (this is * 0.7)
@@ -139,10 +129,16 @@ contract BorrowerLogic is Context, AccessControl {
         //pay loan base straight to lender contract
         //split interest amount into 70% to lender contract, 10% to DAO treasury, 20% to Delegate
 
-        (bool success, ) = delegateAddress.call{value: interestAmountDelegate}("");
-        (bool success1, ) = lenderContract.call{value: interestAmountLenders}("");
-        (bool success2, ) = daoTreasury.call{value: interestAmountDAO}("");
-        return (success, success1, success2);
+        //(bool success, ) = delegateAddress.call{value: interestAmountDelegate}("");
+
+        //(bool success1, ) = lenderContract.call{value: interestAmountLenders}("");
+        //(bool success2, ) = daoTreasury.call{value: interestAmountDAO}("");
+        require(daoToken.balanceOf(address(this)) >= interestAmount, "ERROR: Contract does not have enough funds to give");
+        daoToken.transfer(delegateAddress, interestAmountDelegate);
+        daoToken.transfer(lenderContract, interestAmountLenders);
+        daoToken.transfer(daoTreasury, interestAmountDAO);
+        
+        
 
 
 
@@ -157,6 +153,7 @@ contract BorrowerLogic is Context, AccessControl {
         uint256 loanBase = _LoanNumberToLoanAgreement[loanNumber].loanAmount;
         uint256 LoanValue = _LoanNumberToLoanAgreement[loanNumber].loanAmount;
         uint256 CreationTime = _LoanNumberToLoanAgreement[loanNumber].creationTime;
+        uint256 rate = _LoanNumberToLoanAgreement[loanNumber].rate;
         if(checkOverdue(loanNumber) == true){
             emit loanOverdue(loanNumber, _LoanNumberToLoanAgreement[loanNumber].maturityTime, block.timestamp);
         }
@@ -169,14 +166,16 @@ contract BorrowerLogic is Context, AccessControl {
 
         //fund transfer occurs for amount of loan value
 
-        require(_LoanNumberToLoanAgreement[loanNumber].loanAmount == msg.value, "ERROR: msg.value not equal to outstanding loan amount");
+        _routeFunds(loanNumber, LoanValue, loanBase);
+
+        //require(_LoanNumberToLoanAgreement[loanNumber].loanAmount == msg.value, "ERROR: msg.value not equal to outstanding loan amount");
 
         //if loan value transfer is successful - update loanRepaid to true and return true,
         //else return false and tx bounces. Either that or include same logic via require statement
         return true;
     }
 
-    function checkAccess() public hasAccess returns (uint256){
+    function checkAccess() public view hasAccess returns (uint256){
       return 1;
     }
 

@@ -1,6 +1,6 @@
 const { expect } = require("chai");
 const { utils, Signer } = require("ethers");
-const { ethers } = require("hardhat");
+const { ethers, network } = require("hardhat");
 
 xdescribe("Deployments", function () {
     it("Should successfully Deploy the contracts", async function () {
@@ -98,7 +98,7 @@ xdescribe("Testing routing of funds", function() {
 })
 
 describe("Testing the use of ERC20 rather than ETH", function() {
-  it("Should allow the execution of a loan", async function() {
+  xit("Should allow the execution of a loan", async function() {
     const BorrowerLogic = await ethers.getContractFactory("BorrowerLogic");
     const DAOToken = await ethers.getContractFactory("DAOToken");
     let accounts = await hre.ethers.getSigners();
@@ -122,4 +122,77 @@ describe("Testing the use of ERC20 rather than ETH", function() {
 
 
   });
+
+  xit("Should allow for routing of ERC20 funds", async function() {
+    const BorrowerLogic = await ethers.getContractFactory("BorrowerLogic");
+    const DAOToken = await ethers.getContractFactory("DAOToken");
+    let accounts = await hre.ethers.getSigners();
+    let owner = accounts[0];
+    let delegate = accounts[1];
+    let lender = accounts[2];
+    let treasury = accounts[3];
+    const daoToken = await DAOToken.deploy(ethers.utils.parseEther("1000"), owner.address);
+
+    
+    const borrowerLogic = await BorrowerLogic.deploy(delegate.address, lender.address, treasury.address, daoToken.address);
+    await borrowerLogic.grantDelegate(owner.address);
+    await borrowerLogic.grantLender(lender.address);
+    await daoToken.approve(borrowerLogic.address, ethers.utils.parseEther("100"))
+    await daoToken.transfer(borrowerLogic.address, ethers.utils.parseEther("100"))
+    console.log(ethers.utils.formatEther(await daoToken.balanceOf(borrowerLogic.address)))
+    await daoToken.approve(owner.address, ethers.utils.parseEther("100"))
+    await borrowerLogic.routeFunds(1, ethers.utils.parseEther("11"), ethers.utils.parseEther("10"));
+    let contractBalance = await daoToken.balanceOf(borrowerLogic.address);
+    let ownerbalance = await daoToken.balanceOf(owner.address);
+    let delegatebalance = await daoToken.balanceOf(delegate.address);
+    
+
+    console.log(ethers.utils.formatEther(contractBalance));
+    console.log(ethers.utils.formatEther(ownerbalance));
+    console.log(ethers.utils.formatEther(delegatebalance));
+    console.log(ethers.utils.formatEther(await daoToken.balanceOf(lender.address)))
+    console.log(ethers.utils.formatEther(await daoToken.balanceOf(treasury.address)))
+
+
+  })
+
+  it("Should allow for the repayment of a loan after a certain period of time", async function() {
+    const BorrowerLogic = await ethers.getContractFactory("BorrowerLogic");
+    const DAOToken = await ethers.getContractFactory("DAOToken");
+    let accounts = await hre.ethers.getSigners();
+    let owner = accounts[0];
+    let delegate = accounts[1];
+    let lender = accounts[2];
+    let treasury = accounts[3];
+    const daoToken = await DAOToken.deploy(ethers.utils.parseEther("1000"), owner.address);
+
+    
+    const borrowerLogic = await BorrowerLogic.deploy(delegate.address, lender.address, treasury.address, daoToken.address);
+    await borrowerLogic.grantDelegate(owner.address);
+    await borrowerLogic.grantLender(owner.address);
+    await daoToken.approve(borrowerLogic.address, ethers.utils.parseEther("100"))
+    await daoToken.transfer(borrowerLogic.address, ethers.utils.parseEther("100"))
+    console.log(ethers.utils.formatEther(await daoToken.balanceOf(borrowerLogic.address)))
+
+    await borrowerLogic.createLoanAgreement(ethers.utils.parseEther("10"), 1, 10);
+    await borrowerLogic.executeLoanAgreement(1);
+
+    await network.provider.send("evm_increaseTime", [86500]);
+    await network.provider.send("evm_mine")
+
+    await borrowerLogic.repayLoan(1);
+
+
+    let contractBalance = await daoToken.balanceOf(borrowerLogic.address);
+    let ownerbalance = await daoToken.balanceOf(owner.address);
+    console.log(ethers.utils.formatEther(contractBalance));
+    console.log(ethers.utils.formatEther(ownerbalance));
+    console.log(ethers.utils.formatEther(await daoToken.balanceOf(delegate.address)))
+    console.log(ethers.utils.formatEther(await daoToken.balanceOf(lender.address)))
+    console.log(ethers.utils.formatEther(await daoToken.balanceOf(treasury.address)))
+
+
+
+  })
+
 }) 
